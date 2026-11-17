@@ -309,6 +309,7 @@ public class UpdateService extends Service {
                 }
             }
         }
+        return true;
     }
 
     public void updateGame() {
