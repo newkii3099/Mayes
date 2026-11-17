@@ -2008,13 +2008,69 @@ void InstallCrashFixHooks()
 void InitGui();
 bool (*CGame__InitialiseRenderWare)();
 bool CGame__InitialiseRenderWare_hook() {
-    FLog("Loading SAMP texture database..");
-    CGame__InitialiseRenderWare();
+    FLog("InitialiseRenderWare hook started..");
+    bool result = CGame__InitialiseRenderWare();
+    FLog("Original InitialiseRenderWare finished (result=%d)", result ? 1 : 0);
 
+    FLog("Loading SAMP texture database..");
     TextureDatabaseRuntime::Load("samp", false, TextureDatabaseFormat::DF_Default);
 
+    FLog("Initializing GUI..");
     InitGui();
+    FLog("InitialiseRenderWare hook completed successfully!");
     return true;
+}
+
+TextureDatabaseRuntime* (*TextureDatabaseRuntime__Load)(const char *withName, bool fullyLoad, TextureDatabaseFormat forcedFormat);
+TextureDatabaseRuntime* TextureDatabaseRuntime__Load_hook(const char *withName, bool fullyLoad, TextureDatabaseFormat forcedFormat) {
+    FLog("TextureDatabaseRuntime::Load: '%s' (fullyLoad=%d, forcedFormat=%d)", withName ? withName : "null", fullyLoad ? 1 : 0, (int)forcedFormat);
+    if (!withName) return nullptr;
+
+    if (!strcmp(withName, "cutscene")) {
+        FLog("TextureDatabaseRuntime::Load: skipping 'cutscene' texture database");
+        return nullptr;
+    }
+
+    // Guard: check if the texdb directory or .txt file exists
+    char txtPath[256];
+    snprintf(txtPath, sizeof(txtPath), "%stexdb/%s/%s.txt", g_pszStorage, withName, withName);
+    FILE *f = fopen(txtPath, "r");
+    if (!f) {
+        FLog("TextureDatabaseRuntime::Load: missing '%s', skipping to prevent crash", txtPath);
+        return nullptr;
+    }
+    fclose(f);
+
+    return TextureDatabaseRuntime__Load(withName, fullyLoad, forcedFormat);
+}
+
+void (*TextureDatabaseRuntime__SortEntries)(TextureDatabaseRuntime *thiz, bool b);
+void TextureDatabaseRuntime__SortEntries_hook(TextureDatabaseRuntime *thiz, bool b) {
+    if (!thiz) return;
+
+    // In GTA SA 2.11 ARM64:
+    // thiz + 0x24: numEntries (uint32_t)
+    // thiz + 0x30: thumbs array (6 * 16 bytes = 96 bytes)
+    // thiz + 0xa0: loadedFormat (uint32_t)
+    // Each thumbs entry: [0] = numAlloced, [4] = numEntries, [8] = dataPtr (void*)
+    uint32_t numDbEntries = *(uint32_t*)((uintptr_t)thiz + 0x24);
+    uint32_t loadedFormat = *(uint32_t*)((uintptr_t)thiz + 0xa0);
+
+    if (loadedFormat < 6 && numDbEntries > 0) {
+        uintptr_t thumbsElem = (uintptr_t)thiz + 0x30 + (loadedFormat * 16);
+        void **dataPtr = (void**)(thumbsElem + 8);
+        uint32_t *numEntries = (uint32_t*)(thumbsElem + 4);
+        uint32_t *numAlloced = (uint32_t*)thumbsElem;
+
+        if (!*dataPtr) {
+            FLog("TextureDatabaseRuntime::SortEntries: allocating fallback thumbs buffer for format %u (entries=%u)", loadedFormat, numDbEntries);
+            *numAlloced = numDbEntries;
+            *numEntries = numDbEntries;
+            *dataPtr = calloc(numDbEntries, 24); // 21 bytes per entry struct + padding
+        }
+    }
+
+    TextureDatabaseRuntime__SortEntries(thiz, b);
 }
 void InstallSpecialHooks()
 {
@@ -2023,6 +2079,8 @@ void InstallSpecialHooks()
     InstallUrezHooks();
 
     CHook::InlineHook("_ZN5CGame20InitialiseRenderWareEv", &CGame__InitialiseRenderWare_hook, &CGame__InitialiseRenderWare);
+    CHook::InlineHook("_ZN22TextureDatabaseRuntime4LoadEPKcb21TextureDatabaseFormat", &TextureDatabaseRuntime__Load_hook, &TextureDatabaseRuntime__Load);
+    CHook::InlineHook("_ZN22TextureDatabaseRuntime11SortEntriesEb", &TextureDatabaseRuntime__SortEntries_hook, &TextureDatabaseRuntime__SortEntries);
     CHook::InstallPLT(g_libGTASA + 0x83DE90, &StartGameScreen__OnNewGameCheck_hook, &StartGameScreen__OnNewGameCheck);
     CHook::InlineHook("_Z10NvUtilInitv", &NvUtilInit_hook, &NvUtilInit);
 

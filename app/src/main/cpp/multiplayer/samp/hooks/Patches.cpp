@@ -1705,6 +1705,8 @@ void ApplyGlobalPatches()
 
     // Disable cutscene processing
     CHook::NOP(g_libGTASA + 0x4960E4, 2); // NOP calling CCutsceneMgr::Update from CGame::Process
+    // GTA SA 2.11 ARM64: Disable loading cutscene texture database in CGame::InitialiseRenderWare
+    CHook::NOP(g_libGTASA + 0x55B350, 4);
 
     //ApplyShadowPatch();
     // why to set task if i create my task hmmm
