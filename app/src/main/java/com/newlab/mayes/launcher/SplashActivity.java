@@ -186,7 +186,7 @@ public class SplashActivity extends AppCompatActivity {
         if (launcherStarted) return;
         launcherStarted = true;
 
-        if (!Util.isNetworkConnected(Config.currentContext)) {
+        if (!Util.isNetworkConnected(this)) {
 
             builder.setMessage("There is no internet connection.\n" +
                             "Please exit, connect to the internet and reenter the launcher")

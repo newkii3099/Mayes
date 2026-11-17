@@ -350,6 +350,7 @@ public abstract class GameActivityBase extends AppCompatActivity {
     @Override
     protected void onDestroy() {
         Log.i(TAG, "[!!] onDestroy");
+        instance = null;
         super.onDestroy();
         GameThread.INSTANCE.onActivityDestroyed();
         GameThread.INSTANCE.stop();
@@ -412,10 +413,5 @@ public abstract class GameActivityBase extends AppCompatActivity {
         requestPermissionLauncher.launch(permission);
     }
 
-    @Override
-    public void onDestroy() {
-        Log.i(TAG, "[!!] onDestroy");
-        instance = null;
-        super.onDestroy();
-    }
+
 }

@@ -221,7 +221,6 @@ public class UpdateActivity extends AppCompatActivity{
 
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
-        Config.currentContext = this;
 
         GLSurfaceView.Renderer mGlRenderer = new GLSurfaceView.Renderer() {
             @Override
