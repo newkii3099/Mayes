@@ -1,0 +1,34 @@
+ขั้น 1: Crash แก้บรรทัดเดียว (เสี่ยงต่ำ ได้ผลเร็ว)
+SharedPreferenceCore.getInt() ให้คืน defaultValue (ตัวนี้ทำให้ค่าตั้งค่าอื่นเพี้ยน ควรแก้ก่อนสุด)
+SAMPServerInfo Parcelable ให้ลำดับอ่าน/เขียนตรงกัน
+ClassCastException: CustomKeyboard, CustomEditText
+Null/bounds: Util.listFiles(), isGameUpdateExists(), SAMP.showDialog, DialogManager
+หารด้วยศูนย์: UpdateActivity, DownloaderActivityBase, SeekArcc
+Tab: clear ก่อน notify
+ขั้น 2: ระบบอัปเดต (แก้เป็นชุดเดียว เพราะผูกกัน)
+UpdateService: ย้าย busy-wait ออกจาก UI thread, reset responseFilesInt, แยกสถานะ network fail ออกจาก "Updated", เพิ่ม onDestroy()
+UpdateActivity: request code 1234 vs 0
+แก้หลังขั้น 1 เพราะ isGameUpdateExists() NPE อยู่ในชุดนี้
+ขั้น 3: Thread และ CPU
+GameThread: ใส่ sleep ตอน paused (แก้เร็ว เครื่องไม่ร้อน)
+Speedometer: runOnUiThread สำหรับ native callback
+MovieHandler: deadlock จาก FutureTask.get()
+GameThread.stop() ให้รอ thread เก่าตายก่อน
+ขั้น 4: Settings
+แก้สเกล message count (ทำหลังขั้น 1 ข้อ 1) และเลิก hardcode GPU type = DXT
+ขั้น 5: ความปลอดภัยใน Manifest/WebView
+ปิด cleartext แล้วเช็คว่า server และ WebView ใช้ HTTPS จริง ไม่งั้นแอปจะโหลดไม่ได้
+exported="false" เฉพาะ GameActivity, UpdateActivity, SAMP ส่วน MainActivity ถ้าเป็นหน้า LAUNCHER ต้องคง true ไว้ แล้วทดสอบเปิดแอปจริงหลังแก้
+ขั้น 6: Memory leak (ทำทีเดียวเป็นชุด)
+เคลียร์ static instance ใน onDestroy() ของ SAMP, Speedometer, GameActivityBase, NvUtil, Config.currentContext
+ถอด listener: HeightProvider, ConnectivityManager callback
+Hud เพิ่ม destroy() หยุด polling
+ปิด DatagramSocket ใน SampQueryAPI พร้อมเช็ค buffer/IPv6
+ขั้น 7: ส่วนเสี่ยงสูง (ต้องทดสอบบนเครื่องจริง)
+EGL context conflict, Triple SurfaceHolder callback, downloadAssetPacks() ที่ว่าง, JNI ของ Graphics
+แตะ native layer ควรทำทีละอย่างและ commit แยก
+ขั้น 8: ท้ายสุด
+minifyEnabled true ต้องเขียน ProGuard keep rules ให้ class ที่ native/JNI เรียกใช้ก่อน ไม่งั้นเกมจะ crash ใน release
+ย้าย path ไป getExternalMediaDirs() ซึ่งกระทบตำแหน่งไฟล์เกมของผู้ใช้เดิม ต้องมี migration
+ลบ JCenter, แก้ deprecated API
+เคล็ดลับ: แก้เสร็จแต่ละขั้นให้ build และลองรันบนเครื่องจริงก่อนไปต่อ จะรู้ทันทีว่าขั้นไหนทำให้พัง

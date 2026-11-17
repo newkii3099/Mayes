@@ -1,0 +1,328 @@
+package com.newlab.mayes.launcher;
+
+import android.content.ComponentName;
+import android.content.Context;
+import android.content.Intent;
+import android.content.ServiceConnection;
+import android.content.pm.ActivityInfo;
+import android.net.Uri;
+import android.opengl.GLSurfaceView;
+import android.os.Build;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.IBinder;
+import android.os.Message;
+import android.os.Messenger;
+import android.os.RemoteException;
+import android.util.Log;
+import android.view.WindowManager;
+import android.widget.ProgressBar;
+import android.widget.TextView;
+import android.widget.Toast;
+
+import androidx.annotation.Nullable;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.constraintlayout.widget.ConstraintLayout;
+import androidx.core.content.FileProvider;
+
+import com.joom.paranoid.Obfuscate;
+import com.newlab.mayes.R;
+import com.newlab.mayes.launcher.util.Config;
+
+import java.io.File;
+
+import javax.microedition.khronos.egl.EGLConfig;
+import javax.microedition.khronos.opengles.GL10;
+@Obfuscate
+public class UpdateActivity extends AppCompatActivity{
+    public Messenger mMessenger = new Messenger(new IncomingHandler());
+    public Messenger mService;
+    boolean isBind = false;
+    private UpdateMode mUpdateMode = UpdateMode.Undefined;
+    public int mGpuType;
+
+    private File mGameApk;
+
+    boolean mIsStartingUpdate = false;
+
+    private boolean mIsBind;
+
+    public enum UpdateMode {
+        Undefined,
+        GameDataUpdate,
+        GameUpdate
+    }
+
+    public enum GameStatus {
+        Unknown,
+        GameUpdateRequired,
+        UpdateRequired,
+        Updated
+    }
+
+    public enum UpdateStatus {
+        Undefined,
+        CheckUpdate,
+        CheckFiles,
+        DownloadGame,
+        DownloadGameData
+    }
+
+    public enum eGPUType {
+        DXT,
+        PVR,
+        ETC
+    }
+
+    class IncomingHandler extends Handler {
+        @Override
+        public void handleMessage(Message msg) {
+            if (msg.what == 4) {
+                UpdateActivity.UpdateStatus valueOf = UpdateActivity.UpdateStatus.valueOf(msg.getData().getString("status", ""));
+                if (valueOf == UpdateStatus.DownloadGameData) {
+                    ((TextView)findViewById(R.id.installation_text)).setText("Updating game data...");
+                    Log.d("UpdateActivity", "statusname = " + valueOf);
+                    long j = msg.getData().getLong("total");
+                    long j2 = msg.getData().getLong("current");
+                    long totalMb = Math.max(1, j / 1048576);
+                    long currentMb = j2 / 1048576;
+                    ((TextView) findViewById(R.id.fileName)).setText(msg.getData().getString("filename", ""));
+                    ((TextView) findViewById(R.id.fileCount)).setText(currentMb + "MB/" + totalMb + "MB");
+                    ProgressBar progressBar = findViewById(R.id.download_progress);
+                    progressBar.setIndeterminate(false);
+                    progressBar.setMax(100);
+                    int percent = (j > 0) ? (int) Math.min(100, Math.max(0, (j2 * 100) / j)) : 0;
+                    progressBar.setProgress(percent);
+                    ((TextView) findViewById(R.id.fileProgressPercent)).setText(percent + "%");
+                } else if (valueOf == UpdateActivity.UpdateStatus.CheckUpdate) {
+                    Log.d("UpdateActivity", "statusname = " + valueOf);
+                    long j = msg.getData().getLong("total");
+                    long j2 = msg.getData().getLong("current");
+                    ((TextView) findViewById(R.id.fileName)).setText(msg.getData().getString("filename", ""));
+                    ProgressBar progressBar = (ProgressBar) UpdateActivity.this.findViewById(R.id.download_progress);
+                    progressBar.setMax(100);
+                    int percent = (j > 0) ? (int) Math.min(100, Math.max(0, (j2 * 100) / j)) : 0;
+                    progressBar.setProgress(percent);
+                } else if (valueOf == UpdateStatus.DownloadGame) {
+                    ((TextView)findViewById(R.id.installation_text)).setText("Updating game...");
+                    Log.d("UpdateActivity", "statusname = " + valueOf);
+                    long j = msg.getData().getLong("total");
+                    long j2 = msg.getData().getLong("current");
+                    ((TextView) findViewById(R.id.fileName)).setText(msg.getData().getString("filename", ""));
+                    ((TextView) findViewById(R.id.fileCount)).setText(msg.getData().getLong("currentfile") + "/" + msg.getData().getLong("totalfiles"));
+                    ProgressBar progressBar = (ProgressBar) UpdateActivity.this.findViewById(R.id.download_progress);
+                    progressBar.setIndeterminate(false);
+                    progressBar.setMax(100);
+                    int percent = (j > 0) ? (int) Math.min(100, Math.max(0, (j2 * 100) / j)) : 0;
+                    progressBar.setProgress(percent);
+                }else if (!mIsStartingUpdate) {
+                    Message obtain2 = Message.obtain((Handler) null, 1);
+                    obtain2.replyTo = UpdateActivity.this.mMessenger;
+                    try {
+                        UpdateActivity.this.mService.send(obtain2);
+                    } catch (RemoteException e6) {
+                        e6.printStackTrace();
+                    }
+                    mIsStartingUpdate = true;
+                }
+            }
+            else if(msg.what == 2)
+            {
+                Intent intent;
+                Log.d("Dev Hama", "UpdateService.UPDATE_GAME_DATA");
+                //resetProgress(true, 100, 100);
+                if (msg.getData().getBoolean("status", false)) {
+                    String string3 = msg.getData().getString("apkPath", "");
+                    if (string3.length() > 0) {
+                        mGameApk = new File(string3);
+                    }
+                    if (mGameApk == null || !mGameApk.exists()) {
+                        Log.d("Dev Hama", "Error update game data");
+                        intent = new Intent(UpdateActivity.this, MainActivity.class);
+                        startActivity(intent);
+                        overridePendingTransition(R.anim.fade_in, R.anim.fade_out);
+                        finish();
+                    } else {
+                        requestInstallGame();
+                    }
+                }
+            }
+            else if (msg.what == 1) {
+                Log.i("UpdateActivity", "UpdateService.UPDATE_GAME");
+                ((TextView)findViewById(R.id.installation_text)).setText("Installation...");
+                ProgressBar progressBar = (ProgressBar) UpdateActivity.this.findViewById(R.id.download_progress);
+                progressBar.setIndeterminate(true);
+                startActivity(new Intent(UpdateActivity.this, MainActivity.class));
+                overridePendingTransition(R.anim.fade_in, R.anim.fade_out);
+                finish();
+            }
+        }
+    }
+
+    void requestInstallGame() {
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            if (!getPackageManager().canRequestPackageInstalls()) {
+                Intent intent = new Intent(android.provider.Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                        Uri.parse("package:" + getPackageName()));
+                startActivityForResult(intent, 1234);
+                return;
+            }
+        }
+
+        Uri apkUri;
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            apkUri = FileProvider.getUriForFile(
+                    this,
+                    getPackageName() + ".provider",
+                    mGameApk
+            );
+        } else {
+            apkUri = Uri.fromFile(mGameApk);
+        }
+
+        Intent intent = new Intent(Intent.ACTION_VIEW);
+        intent.setDataAndType(apkUri, "application/vnd.android.package-archive");
+        intent.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+
+        startActivityForResult(intent, 0);
+    }
+
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        Log.i("UpdateActivity", "onActivityResult -> requestCode: " + requestCode + ", resultCode: " + resultCode);
+        if (requestCode == 1234) {
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O || getPackageManager().canRequestPackageInstalls()) {
+                requestInstallGame();
+            } else {
+                Toast.makeText(this, "Permission denied to install update", Toast.LENGTH_SHORT).show();
+            }
+        } else if (requestCode == 0) {
+            if (mGameApk != null && mGameApk.exists()) {
+                mGameApk.delete();
+            }
+            startActivity(new Intent(this, SplashActivity.class));
+            finish();
+        }
+    }
+
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
+        getWindow().setFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN,
+                WindowManager.LayoutParams.FLAG_FULLSCREEN);
+        setContentView(R.layout.activity_update);
+
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
+        Config.currentContext = this;
+
+        GLSurfaceView.Renderer mGlRenderer = new GLSurfaceView.Renderer() {
+            @Override
+            public void onSurfaceCreated(GL10 gl10, EGLConfig eglConfig) {
+                eGPUType egputype;
+                String glGetString = gl10.glGetString(GL10.GL_EXTENSIONS);
+                String glGetString2 = gl10.glGetString(GL10.GL_EXTENSIONS);
+                if (glGetString2.contains("GL_IMG_texture_compression_pvrtc")) {
+                    egputype = eGPUType.PVR;
+                    mGpuType = 3;
+                } else if (glGetString2.contains("GL_EXT_texture_compression_dxt1") || glGetString2.contains("GL_EXT_texture_compression_s3tc") || glGetString2.contains("GL_AMD_compressed_ATC_texture")) {
+                    egputype = eGPUType.DXT;
+                    mGpuType = 1;
+                } else {
+                    egputype = eGPUType.ETC;
+                    mGpuType = 2;
+                }
+                Log.e("Dev Hama", "GPU name: " + glGetString);
+                Log.e("Dev Hama", "GPU type: " + egputype.name());
+
+                mUpdateMode = UpdateMode.valueOf(getIntent().getStringExtra("mode"));
+
+                if (mService == null) {
+                    Intent intent = new Intent(UpdateActivity.this, UpdateService.class);
+                    mIsBind = bindService(intent, serviceConnection, Context.BIND_AUTO_CREATE);
+                } else if (mUpdateMode == UpdateMode.GameDataUpdate) {
+                    Message obtain = Message.obtain((Handler) null, 7);
+                    obtain.getData().putInt("gputype", mGpuType);
+                    obtain.replyTo = mMessenger;
+                    try {
+                        mService.send(obtain);
+                    } catch (RemoteException e) {
+                        e.printStackTrace();
+                    }
+
+                }
+            }
+
+            @Override
+            public void onSurfaceChanged(GL10 gl10, int i, int i1) {
+
+            }
+
+            @Override
+            public void onDrawFrame(GL10 gl10) {
+
+            }
+        };
+
+        ConstraintLayout gpuLayout = findViewById(R.id.gpu);
+        GLSurfaceView mGlSurfaceView = new GLSurfaceView(this);
+        mGlSurfaceView.setRenderer(mGlRenderer);
+        gpuLayout.addView(mGlSurfaceView);
+    }
+
+    private ServiceConnection serviceConnection = new ServiceConnection() {
+        @Override
+        public void onServiceConnected(ComponentName componentName, IBinder iBinder) {
+            mService = new Messenger(iBinder);
+
+            if (mUpdateMode == UpdateMode.GameDataUpdate) {
+                Message obtain = Message.obtain((Handler) null, 7);
+                obtain.getData().putInt("gputype", mGpuType);
+                obtain.replyTo = mMessenger;
+                try {
+                    mService.send(obtain);
+                } catch (RemoteException e) {
+                    e.printStackTrace();
+                }
+            }
+            else if (mUpdateMode == UpdateMode.GameUpdate) {
+                Message obtain = Message.obtain((Handler) null, 2);
+                obtain.getData().putInt("gputype", mGpuType);
+                obtain.replyTo = mMessenger;
+                try {
+                    mService.send(obtain);
+                } catch (RemoteException e) {
+                    e.printStackTrace();
+                }
+            }
+
+            isBind = true;
+        }
+
+        @Override
+        public void onServiceDisconnected(ComponentName componentName) {
+            mService = null;
+            isBind = false;
+        }
+    };
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        if(mIsBind) {
+            unbindService(serviceConnection);
+            mIsBind = false;
+        }
+    }
+
+    @Override
+    public void onBackPressed() {
+    }
+}
