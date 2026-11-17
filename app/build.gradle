@@ -44,8 +44,9 @@ android {
         }
     }
 
-    packagingOptions {
+    packaging {
         jniLibs {
+            pickFirsts += ['**/*.so']
             excludes += ['META-INF/*']
         }
         resources {
