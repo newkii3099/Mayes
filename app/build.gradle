@@ -112,8 +112,6 @@ dependencies {
     testImplementation 'junit:junit:4.13.2'
     androidTestImplementation 'androidx.test.ext:junit:1.1.5'
     androidTestImplementation 'androidx.test.espresso:espresso-core:3.5.1'
-    implementation 'androidx.tonyodev.fetch2:xfetch2:3.1.6'
-    implementation 'androidx.tonyodev.fetch2okhttp:xfetch2okhttp:3.1.6'
     implementation 'com.android.volley:volley:1.2.1'
     implementation 'com.intuit.sdp:sdp-android:1.1.0'
     implementation "androidx.datastore:datastore-preferences:1.0.0"
@@ -123,5 +121,5 @@ dependencies {
     annotationProcessor 'com.github.bumptech.glide:compiler:4.15.1'
     implementation("androidx.lifecycle:lifecycle-process:2.6.2")
     implementation 'com.bytedance.android:shadowhook:1.0.9'
-    implementation 'com.mindorks.android:prdownloader:0.6.0'
+    implementation 'com.github.amitshekhariitbhu:PRDownloader:1.0.2'
 }
